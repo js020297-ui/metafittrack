@@ -1,0 +1,11 @@
+{
+  "name": "MetaFitTrack - 86→70kg",
+  "short_name": "MetaFit",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f0f8ff",
+  "theme_color": "#4CAF50",
+  "icons": [
+    {"src": "data:image/svg+xml;base64,...", "sizes": "192x192", "type": "image/png"}
+  ]
+}
