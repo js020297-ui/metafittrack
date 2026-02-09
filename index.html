@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏆 MetaFitTrack v3.0 - 86→70kg Pereira</title>
+    <style>
+        :root { --bg: #f0f8ff; --card: white; --primary: #4CAF50; --text: #333; --warn: #FF9800; }
+        @media (prefers-color-scheme: dark) { :root { --bg: #1a1a1a; --card: #2a2a2a; --text: #eee; } }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 0; padding: 10px; background: var(--bg); color: var(--text); min-height: 100vh; }
+        .header { text-align: center; padding: 20px; background: linear-gradient(135deg, var(--primary), #45a049); color: white; border-radius: 20px; margin-bottom: 20px; }
+        .card { background: var(--card); padding: 20px; border-radius: 15px; margin: 15px 0; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        input, select, button { padding: 12px; margin: 8px 0; width: 100%; box-sizing: border-box; border: 2px solid #ddd; border-radius: 10px; font-size: 16px; }
+        button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; transition: all 0.3s; }
+        button:hover { background: #45a049; transform: translateY(-2px); }
+        button.secondary { background: var(--warn); }
+        #grafico { width: 100%; height: 220px; border-radius: 10px; background: var(--bg); }
+        table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fa; }
+        .alerta.buena { background: #d4edda; color: #155724; }
+        .alerta.mala { background: #f8d7da; color: #721c24; }
+        .alerta.info { background: #d1ecf1; color: #0c5460; }
+        .fase-grasa { border-left: 5px solid var(--primary); }
+        .fase-musculo { border-left: 5px solid var(--warn); }
+        #theme-toggle { position: fixed; top: 20px; right: 20px; padding: 10px; background: var(--primary); color: white; border: none; border-radius: 50%; width: 50px; height: 50px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <button id="theme-toggle" onclick="toggleTheme()">🌙</button>
+    
+    <div class="header">
+        <h1>🏋️‍♂️ MetaFitTrack v3.0</h1>
+        <p>29a • 170cm • SmartFit Pereira • Rodillas sensibles</p>
+        <p id="fechaHeader"></p>
+    </div>
+    
+    <div class="card">
+        <input type="date" id="fechaInput" value="">
+        <input type="number" id="pesoInput" placeholder="Peso mañana (kg)" step="0.1" min="50" max="100">
+        <input type="number" id="pasosInput" placeholder="Pasos hoy" min="0">
+        <input type="range" id="dietaCumpl" min="0" max="100" value="50">
+        <label>% Dieta + jugos</label>
+        <select id="jugoSelect">
+            <option value="agua">💧 Agua (0 cal)</option>
+            <option value="mango">🥭 Mango (110 cal)</option>
+            <option value="guanabana">🥭 Guanábana (100 cal)</option>
+            <option value="tomate">🍅 Tomate árbol (75 cal)</option>
+            <option value="banano">🍌 Banano (120 cal)</option>
+        </select>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="guardarDatos()">💾 Guardar Día</button>
+            <button class="secondary" onclick="exportarCSV()">📊 Exportar</button>
+        </div>
+    </div>
+    
+    <div id="progreso" class="card"></div>
+    <canvas id="grafico"></canvas>
+    
+    <div id="dieta" class="card">
+        <h3>🍎 Dieta 1700cal + Jugo Hoy</h3>
+        <p id="calExtra">+0 cal (jugo)</p>
+        <table id="tablaDieta"></table>
+    </div>
+    
+    <div id="rutina" class="card"></div>
+    <button onclick="generarRutina()">🎯 Nueva Rutina SmartFit</button>
+    <button onclick="pedirNotif()">🔔 Notificaciones 24/7</button>
+    
+    <script>
+        // DATOS FIJOS TUYOS
+        const PERFIL = { edad: 29, altura: 170, inicio: 86, meta: 70, fechaMeta: new Date('2026-07-05'), calTarget: 1750 };
+        const JUGOS = { agua:0, mango:110, guanabana:100, tomate:75, banano:120 };
+        const DIETA = [
+            {hora:'07:00', comida:'2 huevos (100g) + 50g avena + plátano (400cal)', cal:400},
+            {hora:'10:00', comida:'200g yogur natural + fruta (200cal)', cal:200},
+            {hora:'13:00', comida:'150g pollo + 200g arroz integral + ensalada (500cal)', cal:500},
+            {hora:'16:00', comida:'1 manzana + 30g almendras (250cal)', cal:250},
+            {hora:'19:00', comida:'150g atún/pescado + 200g papa + brócoli (300cal)', cal:300}
+        ];
+        const RUTINAS = {
+            grasa: ['🌀 Elíptica 30min intervalos suaves (rodillas OK)', '🚴 Bici estática 25min + prensa piernas ligera 3x12', '🤸 Remo sentado 20min + crunch suelo'],
+            musculo: ['💪 Prensa piernas 3x12 + press pecho máquina 3x10', '🏋️ Remo cable + curls bíceps 3x12', '🔥 Circuito full body bajo impacto 30min']
+        };
+        
+        let datos = JSON.parse(localStorage.getItem('metafitv3')) || [];
+        
+        function hoy() { return new Date().toISOString().split('T')[0]; }
+        document.getElementById('fechaInput').value = hoy();
+        document.getElementById('fechaHeader').textContent = new Date().toLocaleDateString('es-CO', {weekday:'long'});
+        
+        function bmi(peso) { return (peso / ((PERFIL.altura/100)**2)).toFixed(1); }
+        function faseActual(peso) { return peso > PERFIL.meta ? 'fase-grasa' : 'fase-musculo'; }
+        
+        function guardarDatos() {
+            const fecha = document.getElementById('fechaInput').value;
+            const peso = parseFloat(document.getElementById('pesoInput').value);
+            const pasos = parseInt(document.getElementById('pasosInput').value) || 0;
+            const dietaCumpl = parseInt(document.getElementById('dietaCumpl').value);
+            const jugo = document.getElementById('jugoSelect').value;
+            
+            if (!peso || peso > 150) return alert('Peso válido 50-150kg');
+            
+            const entry = {
+                fecha, peso, pasos, dietaCumpl, jugo,
+                bmi: bmi(peso),
+                calReal: PERFIL.calTarget - JUGOS[jugo],
+                fase: peso > PERFIL.meta ? '🔥 QUEMAR GRASA' : '💪 GANAR MÚSCULO'
+            };
+            
+            const idx = datos.findIndex(d => d.fecha === fecha);
+            if (idx > -1) datos[idx] = entry;
+            else datos.unshift(entry); // Nuevo al inicio
+            datos.sort((a,b) => new Date(b.fecha) - new Date(a.fecha));
+            localStorage.setItem('metafitv3', JSON.stringify(datos.slice(0,365))); // Max 1 año
+            actualizarTodo();
+            notificar(`¡Día guardado! ${entry.fase}`);
+        }
+        
+        function actualizarTodo() {
+            actualizarProgreso();
+            dibujarGrafico();
+            cargarDieta();
+            document.getElementById('pesoInput').value = datos[0]?.peso || '';
+            document.getElementById('pasosInput').value = datos[0]?.pasos || '';
+        }
+        
+        function actualizarProgreso() {
+            if (!datos.length) return;
+            const ult = datos[0];
+            const perdido = PERFIL.inicio - ult.peso;
+            const diasRest = Math.ceil((PERFIL.fechaMeta - new Date()) / 86400000);
+            const semanas = Math.ceil(diasRest / 7);
+            const ritmoNecesario = (PERFIL.inicio - PERFIL.meta) / semanas;
+            const ritmoReal = perdido / (Math.max(1, datos.length / 7));
+            
+            const status = ritmoReal > ritmoNecesario * 0.9 ? 'buena' : 'mala';
+            document.getElementById('progreso').innerHTML = `
+                <div class="alerta ${status} ${faseActual(ult.peso)}">
+                    <h3>${perdido.toFixed(1)}kg (${((perdido/16)*100).toFixed(0)}%)</h3>
+                    <p><strong>${ult.fase}</strong> | BMI: ${ult.bmi} | Cal hoy: ${ult.calReal.toFixed(0)}</p>
+                    <p>Ritmo: ${ritmoReal.toFixed(2)}kg/sem (necesitas ${ritmoNecesario.toFixed(2)})</p>
+                    <p>Pasos: ${ult.pasos.toLocaleString()} | Dieta: ${ult.dietaCumpl}%</p>
+                </div>
+            `;
+        }
+        
+        function dibujarGrafico() {
+            const canvas = document.getElementById('grafico');
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0,0,canvas.width,canvas.height);
+            
+            const ultimos = datos.slice(0,14).map(d => d.peso); // 2 sem
+            if (ultimos.length < 2) return;
+            
+            const minP = Math.min(...ultimos, PERFIL.meta) - 1;
+            const maxP = Math.max(...ultimos, PERFIL.inicio) + 1;
+            const h = canvas.height - 40;
+            
+            // Línea progreso
+            ctx.strokeStyle = '#4CAF50'; ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(40, h - (ultimos[0]-minP)/(maxP-minP)*h);
+            for(let i=1; i<ultimos.length; i++) {
+                ctx.lineTo(40 + i*(canvas.width-80)/ultimos.length, h - (ultimos[i]-minP)/(maxP-minP)*h);
+            }
+            ctx.stroke();
+            
+            // Meta horizontal
+            ctx.strokeStyle = '#FF9800'; ctx.lineWidth = 3; ctx.setLineDash([10,5]);
+            const yMeta = h - (PERFIL.meta-minP)/(maxP-minP)*h;
+            ctx.beginPath(); ctx.moveTo(40, yMeta); ctx.lineTo(canvas.width-40, yMeta); ctx.stroke();
+            ctx.fillStyle = '#FF9800'; ctx.fillText(`Meta 70kg`, canvas.width-100, yMeta-5);
+        }
+        
+        function cargarDieta() {
+            let tabla = '<tr><th>Hora</th><th>🍽️ Comida (cal)</th></tr>';
+            DIETA.forEach(item => tabla += `<tr><td>${item.hora}</td><td>${item.comida}</td></tr>`);
+            document.getElementById('tablaDieta').innerHTML = tabla;
+            actualizarCalJugo();
+        }
+        
+        function actualizarCalJugo() {
+            const jugo = document.getElementById('jugoSelect').value;
+            const cal = JUGOS[jugo];
+            const receta = {
+                mango: '150g mango + 150ml agua + limón',
+                guanabana: '150g pulpa + 150ml agua',
+                tomate: '1 tomate árbol + limón + pepino',
+                banano: '1 banano pequeño + 200ml agua + canela'
+            }[jugo] || '';
+            document.getElementById('calExtra').innerHTML = `+${cal} cal | <small>${receta}</small>`;
+        }
+        
+        function generarRutina() {
+            const ultPeso = datos[0]?.peso || 80;
+            const rutinas = RUTINAS[ultPeso > PERFIL.meta ? 'grasa' : 'musculo'];
+            const rutina = rutinas[Math.floor(Math.random() * rutinas.length)];
+            document.getElementById('rutina').innerHTML = `<h3>🎯 ${ultPeso > PERFIL.meta ? '🔥 Grasa' : '💪 Músculo'}</h3><p>${rutina}</p>`;
+            notificar(`Rutina lista: ${rutina.substring(0,50)}... ¡A SmartFit!`);
+        }
+        
+        function exportarCSV() {
+            let csv = 'Fecha,Peso,Pasos,Dieta%,Jugo,BMI,CalReal,Fase
+';
+            datos.forEach(d => csv += `${d.fecha},${d.peso},${d.pasos},${d.dietaCumpl},${d.jugo},${d.bmi},${d.calReal},${d.fase}
+`);
+            const blob = new Blob([csv], {type: 'text/csv'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `metafit_${hoy()}.csv`; a.click();
+        }
+        
+        function pedirNotif() {
+            if (!('Notification' in window)) return;
+            Notification.requestPermission().then(perm => {
+                if (perm === 'granted') {
+                    // Recordatorios cada 3h + comidas
+                    setInterval(() => {
+                        const ahora = new Date().getHours();
+                        const msgs = [
+                            ahora === 7 && 'Desayuno + jugo mango!',
+                            ahora === 13 && 'Almuerzo pollo!',
+                            ahora === 19 && 'Cena ligera!',
+                            [10,16,22].includes(ahora) && '¡10k pasos + agua!'
+                        ];
+                        msgs.filter(Boolean).forEach(msg => notificar(msg));
+                    }, 3600000); // Hora
+                    notificar('🚀 Notificaciones activas!');
+                }
+            });
+        }
+        
+        function notificar(titulo, body='MetaFitTrack') {
+            if (Notification.permission === 'granted') {
+                new Notification(titulo, {body, icon: '🏃‍♂️', badge: '/icon-192.png'});
+            }
+        }
+        
+        function toggleTheme() {
+            document.body.classList.toggle('dark');
+            document.getElementById('theme-toggle').textContent = document.body.classList.contains('dark') ? '☀️' : '🌙';
+        }
+        
+        // INIT
+        document.getElementById('jugoSelect').onchange = actualizarCalJugo;
+        window.onload = () => {
+            actualizarTodo();
+            generarRutina();
+            if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js'); // PWA ready
+        };
+    </script>
+</body>
+</html>
